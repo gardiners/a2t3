@@ -1,0 +1,171 @@
+---
+title: "BUSA8090 - A2T3"
+author: "Samuel Gardiner - 44952619"
+date: "14 May 2020"
+output:
+  bookdown::pdf_document2:
+    toc: FALSE
+    number_sections: FALSE
+  bookdown::html_document2: 
+documentclass: article
+classoption: a4paper
+header-includes:
+  - \usepackage[margin = 8pt]{subfig}
+  - \captionsetup[figure]{labelfont={bf},textfont={it}}
+  - \captionsetup[table]{labelfont={bf},textfont={it}}
+  - \usepackage[a4paper,left=3cm,right=3cm,top=3cm,bottom=3cm]{geometry}
+bibliography: references.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      cache = TRUE,
+                      fig.align = "center")
+```
+
+# Question 2
+
+## (a)
+
+
+
+Load the required packages: `tidyverse` (for `ggplot`, `dplyr` and others); `maps` for the world map geometry data; and `WDI` to access the World Bank World Development Indictors (WDI) datasets.
+
+If you do not already have them installed, you will require the following packages:
+
+```{r eval = FALSE}
+# Packages we need
+packages <- c("tidyverse", "WDI", "maps", "countrycode")
+# List of installed packages
+installed <- installed.packages()[,1]
+# Install the packages we need which aren't in the list of installed packages:
+install.packages(packages[!packages %in% installed])
+```
+
+
+```{r}
+library(tidyverse)
+library(WDI)
+library(countrycode)
+```
+
+Search the WDI catalogue for an appropriate dataset:
+
+```{r}
+WDIsearch("(CO2).*(PC)", field = "indicator")
+```
+
+Load the emissions data. Limit the query to the year 2014, since this is the most recent year in the WDI dataset which contains values for the `EN.ATM.CO2E.PC` indicator of interest.
+
+```{r fetchwdi, cache = TRUE}
+emissions <- WDI(indicator = "EN.ATM.CO2E.PC", start = 2014, end = 2014,
+                 extra = TRUE)
+glimpse(emissions)
+```
+
+Load the geospatial data into a dataframe.
+
+```{r}
+world <- map_data("world")
+glimpse(world)
+```
+
+To combine the spatial data (geometries) to the emissions data, we need to join on a common field. Although both datasets contain the country name (as a column named `region` in the spatial data and `country` in the WDI emissions data), these do not perfectly map to each other. Fortunately the `countrycode` package has a function `countrycode` which maps country names to country codes. In our case, since the WDI `emissions` dataframe already includes the three-character ISO country code (as `iso3c`), we will add ISO3C codes to our spatial dataset, instead. Note that we specify the destination code type as "wb", which is the World Bank's variant of ISO3, to ensure perfect matching when we perform the join. We use `dplyr::mutate` to add the ISO3C code as a new column to our spatial dataset.
+
+```{r}
+world_cc <- world %>%
+  mutate(iso3c = countrycode(region, origin = "country.name", destination = "wb"))
+glimpse(world_cc)
+```
+
+Now that we have a common attribute to act as a joining key, we are able to join the datasets. Here we use a left join to ensure that we keep all of the country geometries, even where there is missing emissions data (for North Korea and Albania, for example).
+
+```{r}
+world_emissions <- world_cc %>%
+  left_join(emissions, by = "iso3c")
+```
+
+
+We are ready to plot our choropleth (Figure \@ref(fig:co2)):
+
+```{r co2, attr.source='.numberLines', fig.cap="Distribution of CO2 emissions by country in 2014."}
+ggplot(world_emissions, aes(long, lat, group = group, fill = EN.ATM.CO2E.PC)) +
+  geom_polygon() +
+  theme_void() +
+  scale_fill_distiller(palette = "Reds", direction = 1,
+                       name = expression(CO[2] ~ Emissions (tons ~ per ~ capita))) +
+  theme(legend.position = "bottom") +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) 
+```
+
+## (b)
+
+We need the dataset `Bali` from the package `UserNetR` [@Luke2019]. Since `UserNetR` is not available on CRAN, but is available via the package author's GitHub repository, we must install it via `devtools` or `remotes` (one of which must be also installed). We have elected here to use `remotes` as it has fewer dependencies. We also need `tidygraph` and `ggraph` for graph wrangling and plotting respectively.
+
+```{r eval = FALSE}
+# Packages we need
+packages <- c("tidyverse", "remotes", "tidygraph", "ggraph")
+# List of installed packages
+installed <- installed.packages()[,1]
+# Install the packages we need which aren't in the list of installed packages:
+install.packages(packages[!packages %in% installed])
+```
+
+Install `UserNetR` from its GitHub repo at https://github.com/DougLuke/UserNetR. Here I have also specified the current git commit, for reproducibility (ie this script will always pull the same version of `UserNetR`.
+
+```{r eval = FALSE}
+remotes::install_github("https://github.com/DougLuke/UserNetR", ref = "67972b7")
+```
+
+Load the required packages:
+
+```{r}
+library(tidyverse)
+library(tidygraph)
+library(ggraph)
+```
+
+We don't need to load `UserNetR` as we won't be calling any of its functions (in fact, the package contains no functions, only data). Instead we make a call to `data` to load the `Bali` dataset into our environment.
+
+```{r}
+data(Bali, package = "UserNetR")
+class(Bali)
+```
+
+We plot the Bali network as an undirected graph using `ggraph` [@Pedersen2020], a `ggplot` interface to `tidygraph` structures. See Figure \@ref(fig:balinames).
+
+```{r balinames, attr.source='.numberLines', fig.cap="Social network of the Bali bombers. Nodes are named individuals; edges represent known relationships."}
+Bali %>%
+  as_tbl_graph() %>%
+  ggraph() +
+  geom_edge_link() +
+  geom_node_label(aes(label = name)) +
+  theme_graph() +
+  scale_x_continuous(expand = c(0.1,0.1))
+```
+
+## (c)
+
+We repeat the plot above, but use the bombers' roles instead of their names. The mapping from the short codes provided in the dataset column `role` to the role description can be found in `help(Bali, "UserNetR")`.
+
+
+```{r baliroles, attr.source='.numberLines', fig.cap="Social network of the Bali bombers. Nodes are individuals, labelled and coloured by their role in the attack. Edges represent known relationships."}
+Bali %>%
+  as_tbl_graph() %>%
+  activate(nodes) %>%
+  mutate(role = factor(role, levels = c("BM", "CT", "OA", "SB", "TL")),
+         role_desc = factor(role, labels = c("Bomb maker", "Command team",
+                                             "Operational assistant", "Suicide bomber",
+                                             "Team Lima"))) %>%
+  ggraph() +
+  geom_edge_link() +
+  geom_node_label(aes(label = role, fill = role_desc)) +
+  theme_void() +
+  guides(fill = guide_legend(override.aes = list(label = c("BM", "CT", "OA", "SB", "TL")),
+                             title = ""))
+```
+
+# References
