@@ -16,6 +16,7 @@ header-includes:
   - \usepackage[a4paper,left=2.5cm,right=2.5cm,top=3cm,bottom=3cm]{geometry}
   - \usepackage{tcolorbox}
 bibliography: references.bib
+nocite: '@*'
 ---
 
 \newtcolorbox{markbox}{
@@ -37,12 +38,14 @@ knitr::opts_chunk$set(echo = TRUE,
 
 # Note to the marker:
 
-All source code, text, figures and data for this project are contained within the GitHub repo at https://github.com/gardiners/a2t3. To get a copy of all of the scripts for marking, please run the following on your AWS Ubuntu server:
+All source code, text, figures and data for this project are contained within the GitHub repo at https://github.com/gardiners/a2t3. To get a copy of all of the scripts and Tableau workbooks for marking, please run the following on your local computer (in a git bash console if you are on Windows or in Terminal on a Mac):
 
 ```{bash eval = FALSE}
 git clone https://github.com/gardiners/a2t3 gardiners-a2t3
 cd gardiners-a2t3
 ```
+
+or alternatively, download the repository as a zip file at https://github.com/gardiners/a2t3/archive/master.zip
 
 :::
 
@@ -170,9 +173,13 @@ Explaining the `ggplot` call line by line:
 11. Set the plot title (again as a `plotmath` expression to get a subscript on "2").
 12. Set the plot data citation.
 
+::: {.markbox data-latex=""}
+The `R` script `q2a.R` which obtains the data, performs the join and generates the plot is available to download at https://github.com/gardiners/a2t3/raw/master/q2a.R. For the best experience, run the script line-by-line in RStudio.
+:::
+
 ## (b)
 
-We need the dataset `Bali` from the package `UserNetR` [@Luke2019]. Since `UserNetR` is not available on CRAN, but is available via the package author's GitHub repository, we must install it via `devtools` or `remotes` (one of which must be also installed). We have elected here to use `remotes` as it has fewer dependencies. We also need `tidygraph` and `ggraph` for graph wrangling and plotting respectively.
+We need the dataset `Bali` from the package `UserNetR` [@Luke2019]. Since `UserNetR` is not available on CRAN, but is available via the package author's GitHub repository, we must install it via `devtools` or `remotes` (one of which must be also installed). I have elected here to use `remotes` as it has fewer dependencies. We also need `tidygraph` and `ggraph` for graph wrangling and plotting respectively.
 
 ```{r eval = FALSE}
 # Packages we need
@@ -183,7 +190,7 @@ installed <- installed.packages()[,1]
 install.packages(packages[!packages %in% installed])
 ```
 
-Install `UserNetR` from its GitHub repo at https://github.com/DougLuke/UserNetR. Here I have also specified the current git commit, for reproducibility (ie this script will always pull the same version of `UserNetR`.
+Install `UserNetR` from its GitHub repo at https://github.com/DougLuke/UserNetR. Here I have also specified a particular git commit on `DougLuke/UserNetR`, for reproducibility (ie this script will always pull the same version of `UserNetR`).
 
 ```{r eval = FALSE}
 remotes::install_github("https://github.com/DougLuke/UserNetR", ref = "67972b7")
@@ -226,9 +233,13 @@ Line by line:
 6. Overwrite the theme with `theme_graph`, which removes most of the default `ggplot` decoration (axis titles and gridlines, which are not required for a graph).
 7. Adjust the x-axis horizontal padding, otherwise part of Hidayat's name is clipped from the plot.
 
+::: {.markbox data-latex=""}
+The `R` script `q2b.R` which obtains the data and generates the plot is available to download at https://github.com/gardiners/a2t3/raw/master/q2b.R. For the best experience, run the script line-by-line in RStudio.
+:::
+
 ## (c)
 
-We repeat the plot above, but use the bombers' roles instead of their names. The mapping from the short codes provided in the dataset column `role` to the role description can be found in `help(Bali, "UserNetR")`.
+We repeat the plot above, but use the bombers' roles instead of their names. The mapping from the short codes provided in the dataset column `role` to the role description can be found in `help(Bali, "UserNetR")`. The output is presented at Figure \@ref(fig:baliroles).
 
 
 ```{r baliroles, attr.source='.numberLines', fig.cap="Social network of the Bali bombers. Nodes are individuals, labelled and coloured by their role in the attack. Edges represent known relationships."}
@@ -263,6 +274,10 @@ Line by line:
 12. Overwrite the legend's *label* aesthetic so that the symbols on the legend have the short code for each role, as they are presented on the plot. 
 13. Set the legend's title to "Role" rather than the name of the aesthetic is is a guide for, "fill".
 
+::: {.markbox data-latex=""}
+The `R` script `q2c.R` which obtains the data and generates the plot is available to download at https://github.com/gardiners/a2t3/raw/master/q2c.R. For the best experience, run the script line-by-line in RStudio.
+:::
+
 # Question 3
 
 We continue to work with our files `expression.tsv` and `annotation.tsv` from the previous assignment.
@@ -284,6 +299,9 @@ knitr::include_graphics(c("images/q3a_tableau_filter.png","images/q3a_tableau_re
 
 This results in a data connection called `expression` which contains only the rows with genes which have expression under 1000. The resulting data table can be inspected directly by remaining on the "Data source" panel, or can be used to create visualisations in a worksheet.
 
+::: {.markbox data-latex=""}
+A packaged Tableau workbook `q3a.twbx` which contains the data connection and the applied filter is available to download at https://github.com/gardiners/a2t3/raw/master/q3a.twbx. Be sure to switch to the "Data Source" tab to inspect the filter settings.
+:::
 
 
 ## (b)
@@ -303,6 +321,10 @@ knitr::include_graphics(c("images/q3b_tableau_filter.png", "images/q3b_tableau_r
 
 The resulting data connection is called `annotation` and only contains the rows which have the wildcard string "ase" in the column `function`.
 
+::: {.markbox data-latex=""}
+A packaged Tableau workbook `q3b.twbx` which contains the data connection and the applied filter is available to download at https://github.com/gardiners/a2t3/raw/master/q3b.twbx. Be sure to switch to the "Data Source" tab to inspect the filter settings.
+:::
+
 ## (c)
 
 As for **(a)** and **(b)** we can use a data connection filter to retain only the rows we require. The process is as follows:
@@ -319,5 +341,8 @@ The resulting filtered dataset contains only the rows which match these conditio
 knitr::include_graphics(c("images/q3c_tableau_filter.png", "images/q3c_tableau_result.png"))
 ```
 
+::: {.markbox data-latex=""}
+A packaged Tableau workbook `q3c.twbx` which contains the data connection and the applied filter is available to download at https://github.com/gardiners/a2t3/raw/master/q3c.twbx. Be sure to switch to the "Data Source" tab to inspect the filter settings.
+:::
 
 # References
