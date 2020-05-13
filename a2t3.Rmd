@@ -6,16 +6,23 @@ output:
   bookdown::pdf_document2:
     toc: FALSE
     number_sections: FALSE
-  bookdown::html_document2: 
 documentclass: article
 classoption: a4paper
 header-includes:
+  - \usepackage{caption}
   - \usepackage[margin = 8pt]{subfig}
   - \captionsetup[figure]{labelfont={bf},textfont={it}}
   - \captionsetup[table]{labelfont={bf},textfont={it}}
-  - \usepackage[a4paper,left=3cm,right=3cm,top=3cm,bottom=3cm]{geometry}
+  - \usepackage[a4paper,left=2.5cm,right=2.5cm,top=3cm,bottom=3cm]{geometry}
+  - \usepackage{tcolorbox}
 bibliography: references.bib
 ---
+
+\newtcolorbox{markbox}{
+  colframe=black,
+  colback=white,
+  boxsep=5pt,
+  arc=1pt}
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
@@ -25,15 +32,59 @@ knitr::opts_chunk$set(echo = TRUE,
                       fig.align = "center")
 ```
 
+
+::: {.markbox data-latex=""}
+
+# Note to the marker:
+
+All source code, text, figures and data for this project are contained within the GitHub repo at https://github.com/gardiners/a2t3. To get a copy of all of the scripts for marking, please run the following on your AWS Ubuntu server:
+
+```{bash eval = FALSE}
+git clone https://github.com/gardiners/a2t3 gardiners-a2t3
+cd gardiners-a2t3
+```
+
+:::
+
+# Question 1
+
+## (a)
+
+Here @Wickham2016 is demonstrating the creation of a choropleth map, which generally displays a numeric quantity associated with a geographic region using a colour scale. In this case he wants to plot population data from the dataframe `mi_census` using vector geometries that are in the dataframe `mi_counties`. The dataframes need to be combined so that the plot can present both county borders and county population data.
+
+To combine the two dataframes Wickham uses `left_join` from the `dplyr` package. This is equivalent to a SQL left join. The "left-hand" table (which will retain all of its rows) is `mi_census`; the "right-hand" table is `mi_counties`, which will retain only those rows which have a matching row in the left table. The join key is called `county` in `mi_census` (ie, the county name), and `id` in `mi_counties` (which is also the county name). The join is described very succinctly in `help(left_join)`:
+
+```
+left_join()
+  return all rows from x, and all columns from x and y. Rows in x with no match in
+  y will have NA values in the new columns. If there are multiple matches between x
+  and y, all combinations of the matches are returned.
+```
+
+As the geographic data contains many matching rows for each county in `mi_census` (each row being a point which defines part of the county boundary polygon), the dataframe returned by `left_join` contains duplicated population data. This is what Wickham means when he says "This is not particularly space efficient," and what `help` means where it says "`all combinations of the matches are returned`". Each row in the joined dataframe is now a point in space, with associated metadata such as the county name and its population. In this format, the joined dataframe is now ready for plotting with `ggplot` and especially `geom_polygon`.
+
+## (b)
+
+The operation `full_join` performs a similar role in the tutorial as in Wickham's example above: to combine two datasets so that spatial (geographic) data and tabular (GDP per capita) data can both be presented on the same plot. The difference is that this time, using `full_join` returns all rows from `dat_map` (the spatial dataframe) and all rows from `wdi` (the GDP dataframe). Both of the dataframes being joined have a column `ccode`, their country code - this will be the join key. From `help(full_join)`:
+
+```
+full_join()
+  return all rows and all columns from both x and y. Where there are not matching
+  values, returns NA for the one missing.
+```
+
+Therefore any rows from either dataframe which do not match on `ccode` will be retained in the joined dataframe, but will be missing data in the newly added columns. For example, if a country has geographic boundary data in `dat_map`, but its country code `ccode` does match with a `ccode` in the `wdi` dataframe, its geographic data will be retained in the joined dataset (`merged`), but it will have missing data `NA` for any columns which were added from `wdi`. This is useful in this context, as it still allows us to plot the geometry for the country, even if we are missing its GDP data.
+
+It is worth noting that the same outcome (preservation of all country geometries, even with missing GDP data) could have been effected using a left join, as long as the geometry data frame was the left table in the join.
+
+
 # Question 2
 
 ## (a)
 
+Load the required packages: `tidyverse` (for `ggplot`, `dplyr` and others); `maps` for the world map geometry data; `WDI` to access the World Bank World Development Indicators (WDI) datasets; and `countrycode` to assist in matching country names to their ISO3C codes.
 
-
-Load the required packages: `tidyverse` (for `ggplot`, `dplyr` and others); `maps` for the world map geometry data; and `WDI` to access the World Bank World Development Indictors (WDI) datasets.
-
-If you do not already have them installed, you will require the following packages:
+You will need to install the packages if you don't already have them. The following snippet will install the packages if you are missing them:
 
 ```{r eval = FALSE}
 # Packages we need
@@ -44,6 +95,7 @@ installed <- installed.packages()[,1]
 install.packages(packages[!packages %in% installed])
 ```
 
+Load the packages. We don't need to explicitly load `maps`, as the `map_data` function from `ggplot` only requires that it be installed, not loaded.
 
 ```{r}
 library(tidyverse)
@@ -69,7 +121,6 @@ Load the geospatial data into a dataframe.
 
 ```{r}
 world <- map_data("world")
-glimpse(world)
 ```
 
 To combine the spatial data (geometries) to the emissions data, we need to join on a common field. Although both datasets contain the country name (as a column named `region` in the spatial data and `country` in the WDI emissions data), these do not perfectly map to each other. Fortunately the `countrycode` package has a function `countrycode` which maps country names to country codes. In our case, since the WDI `emissions` dataframe already includes the three-character ISO country code (as `iso3c`), we will add ISO3C codes to our spatial dataset, instead. Note that we specify the destination code type as "wb", which is the World Bank's variant of ISO3, to ensure perfect matching when we perform the join. We use `dplyr::mutate` to add the ISO3C code as a new column to our spatial dataset.
@@ -80,26 +131,44 @@ world_cc <- world %>%
 glimpse(world_cc)
 ```
 
-Now that we have a common attribute to act as a joining key, we are able to join the datasets. Here we use a left join to ensure that we keep all of the country geometries, even where there is missing emissions data (for North Korea and Albania, for example).
+Now that we have a common attribute to act as a joining key, we are able to join the datasets. Here we use a left join to ensure that we keep all of the country geometries, even where there is missing emissions data (for North Korea, Eritrea and Kosovo, for example).
 
 ```{r}
 world_emissions <- world_cc %>%
   left_join(emissions, by = "iso3c")
 ```
 
-
 We are ready to plot our choropleth (Figure \@ref(fig:co2)):
 
-```{r co2, attr.source='.numberLines', fig.cap="Distribution of CO2 emissions by country in 2014."}
+```{r co2, attr.source='.numberLines', fig.cap="Distribution of $\\text{CO}_2$ emissions by country in 2014."}
 ggplot(world_emissions, aes(long, lat, group = group, fill = EN.ATM.CO2E.PC)) +
   geom_polygon() +
   theme_void() +
   scale_fill_distiller(palette = "Reds", direction = 1,
                        name = expression(CO[2] ~ Emissions (tons ~ per ~ capita))) +
-  theme(legend.position = "bottom") +
+  theme(legend.position = "bottom",
+        plot.caption = element_text(hjust = 0, colour = "slategrey")) +
   scale_x_continuous(expand = c(0, 0)) +
-  scale_y_continuous(expand = c(0, 0)) 
+  scale_y_continuous(expand = c(0, 0)) +
+  coord_quickmap() +
+  labs(title = expression("Distribution of" ~ CO[2] ~ "emissions (2014)"),
+       caption = "Sources: World Bank (2016); Natural Earth Project (2020)")
 ```
+
+Explaining the `ggplot` call line by line:
+
+1. Call `ggplot`. Map `long` and `lat` to the x- and y-axes, respectively. Map the `emissions` column to the *fill* aesthetic, which will determine country colour on our choropleth. Map the `group` column, which identifies all of the spatial points belonging to a contiguous geographic polygon (a country or an island, for example), to the *group* aesthetic - this will ensure that each polygon we plot will map to a single spatial polygon.
+2. Use `geom_polygon` to draw a polygon for each `group`. It has inherited the *x*, *y*, *group* and *fill* aesthetics from the call to ggplot, so we do not need to define them again.
+3. Set `theme_void` to remove most of the default `ggplot` decorations (grid lines, grey background etc) which are not necessary on a map.
+4. Overwrite the *fill* scale with a ColorBrewer palette. In this case I have chosen the default "Reds" palette, and set direction `1` so that as $\text{CO}_2$ emissions increase, so does the intensity of red for that country.
+5. Name the *fill* scale using a `plotmath` expression so that we can get a subscript on the "2" in $\text{CO}_2$. 
+6. Move the legend to the bottom of the plot so that there is more room for the map itself.
+7. Move the citation to the left of the plot and make it light grey so it does not distract.
+8. Remove the horizontal padding from the x-axis so that there is more room for the map.
+9. Likewise, remove the vertical padding from the y-axis.
+10. Use `coord_quickmap` to compute a geographic projection (from a globe to a rectangle) for the spatial data. This improves the aesthetic quality of the map by ensuring that country shapes and sizes are approximately preserved, regardless of the aspect ratio of the plotted image. 
+11. Set the plot title (again as a `plotmath` expression to get a subscript on "2").
+12. Set the plot data citation.
 
 ## (b)
 
@@ -147,6 +216,16 @@ Bali %>%
   scale_x_continuous(expand = c(0.1,0.1))
 ```
 
+Line by line:
+
+1. Pipe the `Bali` network object to the next function in our call.
+2. Use `tidygraph::as_tbl_graph` to convert from a `network` object (as `UserNetR::Bali` is provided) into the `tbl_graph` data structure used by the `tidygraph` ecosystem. 
+3. Call to `ggraph`. This is equivalent to a call to `ggplot` on a tibble or dataframe, but for tidygraph objects. We do not need to explicitly map spatial aesthetics to edges or nodes.
+4. Add a geometry layer to plot the edges between the bombers. `geom_edge_link` plots straight lines between nodes.
+5. Add a geometry layer to plot the nodes. We have chosen to plot each node as the name of the bomber represented by that node. We need to explicitly map the `name` column to the *label* aesthetic.
+6. Overwrite the theme with `theme_graph`, which removes most of the default `ggplot` decoration (axis titles and gridlines, which are not required for a graph).
+7. Adjust the x-axis horizontal padding, otherwise part of Hidayat's name is clipped from the plot.
+
 ## (c)
 
 We repeat the plot above, but use the bombers' roles instead of their names. The mapping from the short codes provided in the dataset column `role` to the role description can be found in `help(Bali, "UserNetR")`.
@@ -156,16 +235,89 @@ We repeat the plot above, but use the bombers' roles instead of their names. The
 Bali %>%
   as_tbl_graph() %>%
   activate(nodes) %>%
-  mutate(role = factor(role, levels = c("BM", "CT", "OA", "SB", "TL")),
-         role_desc = factor(role, labels = c("Bomb maker", "Command team",
-                                             "Operational assistant", "Suicide bomber",
-                                             "Team Lima"))) %>%
+  mutate(role = factor(role, levels = c("OA", "CT", "BM", "TL", "SB")),
+         role_desc = factor(role, labels = c("Operational assistant", "Command team",
+                                             "Bomb maker", "Team Lima",
+                                             "Suicide bomber"))) %>%
   ggraph() +
   geom_edge_link() +
   geom_node_label(aes(label = role, fill = role_desc)) +
   theme_void() +
-  guides(fill = guide_legend(override.aes = list(label = c("BM", "CT", "OA", "SB", "TL")),
-                             title = ""))
+  guides(fill = guide_legend(override.aes = list(label = c("OA", "CT", "BM", "TL", "SB")),
+                             title = "Role"))
 ```
+
+Line by line:
+
+1. Pipe the `Bali` network into the next function.
+2. Convert `Bali` from a `network` to a `tbl_graph`, so that we can use `tidygraph` functions (like `activate`) and `dplyr` verbs (like `mutate`).
+3. Select the `nodes` tibble for further operations. A `tidygraph` is a list of tibbles; one for edges (and their attributes or metadata) and another for nodes (and their attributes). The `activate` function allows us to act on one of the tibbles at a time.
+4. Use `dplyr::mutate` to convert role to a factor (categorical variable). Explicitly define the order of its levels, so that the order in the legend matches their approximate order on the graph.
+5. Use `dplyr::mutate` to create a new variable, `role_desc` which contains a more verbose description of the roles. The order of these levels matches `role`.
+6. (5 continues...)
+7. (5 continues...)
+8. Call `ggraph` to begin plotting.
+9. Add a geometry to plot the edges. As above, `geom_edge_link` plots straight lines between nodes.
+10. Add a geometry to plot the nodes. This time we map the `role` factor to the *label* aesthetic, rather than using the bombers' names. We also map our descriptive column `role_desc` to the *fill* aesthetic, so that each role gets a distinct colour on the graph, and to make the legend more interpretable.
+11. Use `theme_void` to remove gridlines, axis markers, ticks etc.
+12. Overwrite the legend's *label* aesthetic so that the symbols on the legend have the short code for each role, as they are presented on the plot. 
+13. Set the legend's title to "Role" rather than the name of the aesthetic is is a guide for, "fill".
+
+# Question 3
+
+We continue to work with our files `expression.tsv` and `annotation.tsv` from the previous assignment.
+
+## (a)
+
+My approach is to connect to the `expression.tsv` file and add a data connection filter. The process is as follows:
+
+* In Tableau, from the "Connect" panel and within the "To a file" subpanel, select "Text file".
+* Navigate to and select `expression.tsv`. 
+* With the `expression` connection selected, navigate to the "Data" main menu, and choose "Edit Data Source Filters..."
+* In the resulting "Edit Data Source Filters" dialog box, click the "Add" button.
+* In the resulting "Add Filter" dialog box, select the `expr_value` field from the list and click "OK".
+* In the resulting "Filter [expr_value]" dialog box, select the "At most" tab and set the value to 1000. Click "OK" to close the "Filter [expr_value]" dialog, and then click "OK" again to close the "Edit Data Source Filters" dialog.
+
+```{r q3a-filter, dpi = 150, echo = FALSE, fig.cap="Filter settings and results for Question 3 (a).", fig.subcap=c("Filter to retain only rows with \\texttt{expr\\_value} less than 1000.", "Result of applying the filter to the data connection. Only two genes are retained.")}
+knitr::include_graphics(c("images/q3a_tableau_filter.png","images/q3a_tableau_result.png"))
+```
+
+This results in a data connection called `expression` which contains only the rows with genes which have expression under 1000. The resulting data table can be inspected directly by remaining on the "Data source" panel, or can be used to create visualisations in a worksheet.
+
+
+
+## (b)
+
+We can use a similar approach to filter the annotation table.
+
+* Connect to the text file `annotation.tsv`.
+* Add a data source filter to the `function` field.
+* Select the "Wildcard" tab.
+* In the "Match value" field, add the text "ase" (without the quotes).
+* Click "OK" to close the "Filter [function]" dialog, and then click "OK" again to close the "Edit Data Source Filters" dialog.
+
+```{r q3b-filter, echo = FALSE, dpi = 150, fig.cap="Filter settings and result for Question 3 (b).", fig.subcap=c("Filter to retain only rows containing ``ase'' in the column \\texttt{function}.", "Result of the filter applied to the data connection.")}
+knitr::include_graphics(c("images/q3b_tableau_filter.png", "images/q3b_tableau_result.png"))
+```
+
+
+The resulting data connection is called `annotation` and only contains the rows which have the wildcard string "ase" in the column `function`.
+
+## (c)
+
+As for **(a)** and **(b)** we can use a data connection filter to retain only the rows we require. The process is as follows:
+
+* Connect to the text file `annotation.tsv`.
+* Add a data source filter to the `metabolism` field.
+* Under the "General" tab, choose the "Select from list" radio box.
+* Check the boxes for "Purine biosynthesis" and "Pyrmidine biosynthesis".
+* Click "OK" to close the "Filter [metabolism]" dialog, and then click "OK" again to close the "Edit Data Source Filters" dialog.
+
+The resulting filtered dataset contains only the rows which match these conditions.
+
+```{r q3c, echo = FALSE, dpi = 150, fig.cap="Filter and results for Question 3 (c).", fig.subcap=c("Filter settings to retain only rows with the desired strings in column \\texttt{metabolism}.", "Result of applying the filter.")}
+knitr::include_graphics(c("images/q3c_tableau_filter.png", "images/q3c_tableau_result.png"))
+```
+
 
 # References
